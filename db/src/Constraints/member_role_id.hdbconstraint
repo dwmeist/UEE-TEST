@@ -1,0 +1,1 @@
+CONSTRAINT fk_member_role_id on member FOREIGN KEY (role_id) REFERENCES role(role_id) ON DELETE SET NULL

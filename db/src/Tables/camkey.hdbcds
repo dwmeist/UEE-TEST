@@ -1,0 +1,7 @@
+entity CAMKEY {
+    key CAMKEY            : hana.VARCHAR(45) not null;
+        CLASSIFICATION    : hana.VARCHAR(255) null;
+        START_DATE        : UTCTimestamp null;
+        CAMKEY_CACHE      : hana.VARCHAR(2000);
+        CAMKEY_CACHE_DATE : UTCTimestamp null;
+};

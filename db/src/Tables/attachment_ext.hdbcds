@@ -1,0 +1,4 @@
+entity ATTACHMENT_EXT {
+    key PARENT_ATTACHMENT_ID : Integer not null;
+        ATTACHMENT_TEXT      : hana.VARCHAR(45) null;
+};

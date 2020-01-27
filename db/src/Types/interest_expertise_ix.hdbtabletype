@@ -1,0 +1,6 @@
+TYPE interest_expertise_ix AS
+
+   TABLE (Person_ID    INTEGER,
+          Knowledge_ID INTEGER,
+          Level        VARCHAR(200),
+          Confirmed    SMALLINT)

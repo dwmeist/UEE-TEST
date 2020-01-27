@@ -1,0 +1,16 @@
+entity RDS_UEE_FD_DATA_REQUEST_EC {
+    key PZINSKEY         : String(256);
+        REQUESTTITLE     : String(256);
+        MISSIONDETAILS   : String(256);
+        PXCOMMITDATETIME : UTCTimestamp;
+}
+technical configuration {
+    fulltext index REQUESTTITLE   on (REQUESTTITLE)
+        async
+        configuration 'UEE_KEYWD_ECPS'
+        text analysis on;
+    fulltext index MISSIONDETAILS on (MISSIONDETAILS)
+        async
+        configuration 'UEE_KEYWD_ECPS'
+        text analysis on;
+};

@@ -1,0 +1,49 @@
+PROCEDURE Get_Knowledge_Strings(in  Int_Exper_Table interest_expertise_ix,
+                                in  Person_ID integer,
+                                out Found_Person tinyint,
+                                out Name_List clob,
+                                out QName_List clob)
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Knowledge_Strings
+-- Description: Generate the strings needed to build the knowledge queries
+-- Modifications:
+-- 20191121  Replaced all single quotes in name with 2 single quotes so when used
+--           later it would escape the single quote properly.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare Knowledge_ID integer;                 -- Knowledge ID currently being processed
+   declare Knowledge_Name varchar(200);          -- Knowledge Name currently being processed
+   declare First_One tinyint = 1;                -- Indicates if the First Knowledge ID is being processed
+
+   Found_Person = 0;
+   Name_List = '';
+   QName_List = '';
+
+   -- Get the First Knowledge ID that the person has expertise in
+   select min(knowledge_id) into Knowledge_ID
+   from :Int_Exper_Table
+   where Person_ID = :Person_ID;
+
+   -- Process each Knowledge ID that the person has expertise or interest in
+   while (:Knowledge_ID is not NULL) do
+      Found_Person = 1;
+      --  Get the Knowledge Name associated with the Knowledge ID.  Allow for single quotes in the name
+      select REPLACE(name, '''', '''''') into Knowledge_Name from knowledge where Knowledge_ID = :Knowledge_ID;
+
+      --  Add the Knowledge ID and Name to the lists of Knowledge IDs and Names
+      if (:First_One = 0) then
+         Name_List = :Name_List || ' OR ';
+         QName_List = :QName_List || ',';
+      end if;
+      Name_List = :Name_List || trim(:Knowledge_Name);
+      QName_List = :QName_List || '''' || trim(:Knowledge_Name) || '''';
+
+      --  Get the next Knowledge ID
+      select min(x.knowledge_id) into Knowledge_ID
+      from :Int_Exper_Table x
+      where Person_ID = :Person_ID
+        and Knowledge_ID > :Knowledge_ID;
+      First_One = 0;
+   end while;
+END

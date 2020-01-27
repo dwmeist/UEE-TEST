@@ -1,0 +1,66 @@
+PROCEDURE Get_Sentiment_Summary(in Begin_Time  timestamp,
+                                in End_Time    timestamp)
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Sentiment_Summary
+-- Description: Retrieve summary of sentiment over a period of time.  Only dates are
+--              expected.  If times are given they will be ignored.  The begin time
+--              will be set to 00:00 of Begin_Time and the end time will be set to
+--              00:00 of the day after End_Time making the End_Time day inclusive.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare Begin_Date date;  -- Date of Begin_Time and time of 00:00
+   declare End_Date date;    -- Day after End_time and time of 00:00
+
+   -- Set Begin_Date to the beginning of the day (time 00:00 of Begin_Time)
+   Begin_Date = Begin_Time;
+   -- Set End_Date to the beginning of the following day (time 00:00 of day after End_Time)
+   End_Date = ADD_DAYS(End_Time, 1);
+
+   -- Retrieve all sentiment tokens for the range given and score the sentiment
+   query = select TA.pzinskey,
+                  TA.ta_counter,
+                  R.pxcommitdatetime,
+                  case TA.ta_type
+                     when 'StrongPositiveSentiment' then 100
+                     when 'WeakPositiveSentiment' then 50
+                     when 'NeutralSentiment' then 0
+                     when 'WeakNegativeSentiment' then -50
+                     when 'StrongNegativeSentiment' then -100
+                  end as Sentiment
+           from "$TA_RDS_UEE_FD_DATA_REQUEST_VOC.REQUESTTITLE" TA,
+                "RDS_UEE_FD_DATA_REQUEST_VOC" R
+           where ta_type in ('StrongNegativeSentiment',
+                             'WeakNegativeSentiment',
+                             'NeutralSentiment',
+                             'WeakPositiveSentiment',
+                             'StrongPositiveSentiment')
+             and TA.pzinskey = R.pzinskey
+             -- Make the End_Time inclusive
+             and R.pxcommitdatetime >= :Begin_Date and R.pxcommitdatetime < :End_Date
+           union all
+           select TA.pzinskey,
+                  TA.ta_counter,
+                  R.pxcommitdatetime,
+                  case TA.ta_type
+                     when 'StrongPositiveSentiment' then 100
+                     when 'WeakPositiveSentiment' then 50
+                     when 'NeutralSentiment' then 0
+                     when 'WeakNegativeSentiment' then -50
+                     when 'StrongNegativeSentiment' then -100
+                  end as Sentiment
+           from "$TA_RDS_UEE_FD_DATA_REQUEST_VOC.MISSIONDETAILS" TA,
+                "RDS_UEE_FD_DATA_REQUEST_VOC" R
+           where ta_type in ('StrongNegativeSentiment',
+                             'WeakNegativeSentiment',
+                             'NeutralSentiment',
+                             'WeakPositiveSentiment',
+                             'StrongPositiveSentiment')
+             and TA.pzinskey = R.pzinskey
+             and R.pxcommitdatetime >= :Begin_Date and R.pxcommitdatetime < :End_Date;
+
+   -- Return the range and the computed average Sentiment score
+   select TO_TIMESTAMP(:Begin_Date) as Begin_Time,
+          ADD_NANO100(:End_Date, -1) as End_Time,
+          TO_INT(sum(Sentiment)/count(*)) as Sentiment from :query;
+END

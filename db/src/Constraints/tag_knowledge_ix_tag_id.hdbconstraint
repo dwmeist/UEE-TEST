@@ -1,0 +1,1 @@
+CONSTRAINT fk_tag_knowledge_ix_tag_id on tag_knowledge_ix FOREIGN KEY (tag_id) REFERENCES tag(tag_id) ON DELETE SET NULL

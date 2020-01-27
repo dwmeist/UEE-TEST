@@ -1,0 +1,88 @@
+PROCEDURE Get_Sentiment_Weekly(in Begin_Time timestamp,
+                                                     in End_Time   timestamp)
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Sentiment_Weekly
+-- Description: Retrieve weekly totals of sentiment over a period of time
+-------------------------------------------------------------------------------------
+BEGIN
+   declare First_Day_Of_First_Week date;  -- Sunday of the first week
+   declare Last_Day_Of_Last_Week date;    -- Sunday after Saturday of the last week
+   declare Cur_Time timestamp;            -- Used to populate #results table
+
+   -- Compute the First and Last days of time period specified
+   First_Day_Of_First_Week = ADD_DAYS(:Begin_Time, (-1)*MOD((WEEKDAY(:Begin_Time)+1),7));
+   Last_Day_Of_Last_Week = ADD_DAYS(:End_Time, MOD(12 - WEEKDAY(:End_Time), 7) + 1);
+
+   -- Populate a temp table with all weeks in the range with a Sentiment score of NULL in case some rows have no sentiment
+   create local temporary table #results(Begin_Time timestamp, End_Time timestamp, Sentiment integer);
+   Cur_Time = :First_Day_Of_First_Week;
+   while (:Cur_Time < :Last_Day_Of_Last_Week) do
+      insert into #results(Begin_Time, End_Time)
+                  values (:Cur_Time, ADD_NANO100(ADD_DAYS(:Cur_Time, 7), -1));
+      Cur_Time = ADD_DAYS(:Cur_Time, 7);
+   end while;
+
+   -- Retrieve all tokens and what week they occurred in for the range given
+   query = select TA.pzinskey,
+                  TA.ta_counter,
+                  case TA.ta_type
+                     when 'StrongPositiveSentiment' then 100
+                     when 'WeakPositiveSentiment' then 50
+                     when 'NeutralSentiment' then 0
+                     when 'WeakNegativeSentiment' then -50
+                     when 'StrongNegativeSentiment' then -100
+                  end as Sentiment,
+                  TO_DATE(ADD_DAYS(R.pxcommitdatetime, (-1)*MOD((WEEKDAY(R.pxcommitdatetime)+1),7))) as Begin_Time,
+                  TO_DATE(ADD_DAYS(R.pxcommitdatetime, MOD(12 - WEEKDAY(R.pxcommitdatetime), 7) + 1)) as End_Time,
+                  R.pxcommitdatetime
+           from "$TA_RDS_UEE_FD_DATA_REQUEST_VOC.REQUESTTITLE" TA,
+                "RDS_UEE_FD_DATA_REQUEST_VOC" R
+           where ta_type in ('StrongNegativeSentiment',
+                             'WeakNegativeSentiment',
+                             'NeutralSentiment',
+                             'WeakPositiveSentiment',
+                             'StrongPositiveSentiment')
+             and TA.pzinskey = R.pzinskey
+             and R.pxcommitdatetime >= :First_Day_Of_First_Week and R.pxcommitdatetime < :Last_Day_Of_Last_Week
+           union all
+           select TA.pzinskey,
+                  TA.ta_counter,
+                  case TA.ta_type
+                     when 'StrongPositiveSentiment' then 100
+                     when 'WeakPositiveSentiment' then 50
+                     when 'NeutralSentiment' then 0
+                     when 'WeakNegativeSentiment' then -50
+                     when 'StrongNegativeSentiment' then -100
+                  end as Sentiment,
+                  TO_DATE(ADD_DAYS(R.pxcommitdatetime, (-1)*MOD((WEEKDAY(R.pxcommitdatetime)+1),7))) as Begin_Time,
+                  TO_DATE(ADD_DAYS(R.pxcommitdatetime, MOD(12 - WEEKDAY(R.pxcommitdatetime), 7) + 1)) as End_Time,
+                  R.pxcommitdatetime
+           from "$TA_RDS_UEE_FD_DATA_REQUEST_VOC.MISSIONDETAILS" TA,
+                "RDS_UEE_FD_DATA_REQUEST_VOC" R
+           where ta_type in ('StrongNegativeSentiment',
+                             'WeakNegativeSentiment',
+                             'NeutralSentiment',
+                             'WeakPositiveSentiment',
+                             'StrongPositiveSentiment')
+             and TA.pzinskey = R.pzinskey
+             and R.pxcommitdatetime >= :First_Day_Of_First_Week and R.pxcommitdatetime < :Last_Day_Of_Last_Week;
+
+   -- Get the weekly counts of each sentiment
+   results_query = select TO_TIMESTAMP(Begin_Time) as Begin_Time,
+                          ADD_NANO100(End_Time, -1) as End_Time,
+                          TO_INT(sum(Sentiment) / count(*)) as Sentiment
+                   from :query
+                   group by Begin_Time, End_Time;
+
+   -- Update results table with all of the sentiment that was found
+   update a set Sentiment = b.Sentiment
+   from #results a, :results_query b
+   where a.begin_time = b.begin_time;
+
+   -- Retrieve the final results set
+   select Begin_Time, End_Time, Sentiment from #results;
+
+   -- Clean up
+   drop table #results;
+END

@@ -1,0 +1,1 @@
+CONSTRAINT fk_attachment_organization_ix_attachment_id on attachment_organization_ix FOREIGN KEY (attachment_id) REFERENCES attachment(attachment_id) ON DELETE SET NULL

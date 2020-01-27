@@ -1,0 +1,1 @@
+CONSTRAINT fk_member_service_id on member FOREIGN KEY (service_id) REFERENCES service(service_id) ON DELETE SET NULL

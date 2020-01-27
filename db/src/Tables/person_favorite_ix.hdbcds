@@ -1,0 +1,5 @@
+entity PERSON_FAVORITE_IX {
+    key PERSON_ID           : Integer not null;
+    key REFERENCE_SYSTEM_ID : Integer not null;
+    key REFERENCE_ID        : hana.VARCHAR(255);
+};

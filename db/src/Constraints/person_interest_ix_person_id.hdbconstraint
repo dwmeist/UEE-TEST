@@ -1,0 +1,1 @@
+CONSTRAINT fk_person_interest_ix_person_id on person_interest_ix FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE CASCADE

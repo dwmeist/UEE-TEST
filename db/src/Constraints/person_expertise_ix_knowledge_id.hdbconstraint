@@ -1,0 +1,1 @@
+CONSTRAINT fk_person_expertise_ix_knowledge_id on person_expertise_ix FOREIGN KEY (knowledge_id) REFERENCES knowledge(knowledge_id) ON DELETE SET NULL

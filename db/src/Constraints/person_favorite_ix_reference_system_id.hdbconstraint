@@ -1,0 +1,1 @@
+CONSTRAINT fk_person_favorite_ix_reference_system_id on person_favorite_ix FOREIGN KEY(reference_system_id) REFERENCES reference_system(reference_system_id) ON DELETE SET NULL

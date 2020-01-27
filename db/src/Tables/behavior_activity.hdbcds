@@ -1,0 +1,7 @@
+entity BEHAVIOR_ACTIVITY {
+    key BEHAVIOR_ID  : Integer not null;
+    key PERSON_ID    : Integer not null;
+        CREATED_DATE : UTCTimestamp null;
+        CATEGORY     : hana.VARCHAR(200) null;
+        ACTIVITY     : hana.VARCHAR(200) null;
+};

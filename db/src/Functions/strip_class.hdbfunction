@@ -1,0 +1,25 @@
+function Strip_Class(String_With_Class varchar(256))
+returns ret_val varchar(256) LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Strip_Class
+-- Description: Removes the classification appearing at the beginning of the string
+-------------------------------------------------------------------------------------
+begin
+   declare String_Left varchar(256);
+   declare paren_cnt integer = 0;
+
+   ret_val = substring(:String_With_Class, 1);
+   String_Left = trim(:String_With_Class);
+   if (substring(:String_Left, 1, 1) = '(') then
+      paren_cnt = 1;
+      while (:paren_cnt > 0) do
+         String_Left = substring(:String_Left, 2);
+         if (substring(:String_Left, 1, 1) = '(') then
+            paren_cnt = :paren_cnt + 1;
+         elseif (substring(:String_Left, 1, 1) = ')') then
+            paren_cnt = :paren_cnt - 1;
+         end if;
+      end while;
+      ret_val = substring(:String_Left, 2);
+   end if;
+end

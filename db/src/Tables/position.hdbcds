@@ -1,0 +1,7 @@
+entity POSITION {
+    key POSITION_ID     : Integer not null;
+    key ORGANIZATION_ID : Integer not null;
+    key PERSON_ID       : Integer not null;
+        ROLE            : hana.VARCHAR(45) null;
+        DESCRIPTION     : hana.VARCHAR(45) null;
+};

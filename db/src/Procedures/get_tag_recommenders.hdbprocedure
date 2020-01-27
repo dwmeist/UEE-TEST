@@ -1,0 +1,91 @@
+PROCEDURE Get_Tag_Recommenders(in request    nclob,
+                               in request_id Integer default 0)
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Tag_Recommenders
+-- Description: Get all tags that are associated with tokens found in a request
+-- Modifications:
+-- 20191203  dwmeist  Set tag size to 500, added code to save off request string and
+--                    tags found, modified search for tokens in tags to be more inclusive,
+--                    set tags to be lower case.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare out_tbl table(token nvarchar(5000), type nvarchar(100));  -- Table containing all tokens found in request
+   declare cur_token nvarchar(500);                                  -- Current token being processed
+
+   create local temporary table #tags_found(tag_id integer, name nvarchar(500), new_tag tinyint default 0);
+
+   -- Save current version of request, replace if already exists
+   if (:request_id > 0) then
+      delete from Request_String where Request_ID = :request_id;
+      insert into Request_String(request_id, request_String) values (:request_id, :request);
+   end if;
+
+   -- Get a table of all tokens found in the request
+   call Extract_Tokens(:request, out_tbl);
+
+   -- Populate #tags_found with tokens found if they are not currently a tag
+   insert into #tags_found(tag_id, name, new_tag)
+      select -1, lower(substring(token, 1, 500)), 1
+      from :out_tbl
+      where lower(substring(token, 1, 500)) not in (select lower(name) from tag);
+
+   -- Populate #tags_found with all tags whose name contains a token from the request
+   select min(substring(token, 1, 500)) into cur_token from :out_tbl;
+   while (:cur_token is not NULL) do
+      insert into #tags_found(tag_id, name)
+         select tag_id, lower(name)
+         from tag
+         where locate_regexpr(('[^[:alnum:]]' || lower(:cur_token) || '[^[:alnum:]]') IN lower(name)) > 0
+            or locate_regexpr((lower(:cur_token) || '[^[:alnum:]]') IN lower(name)) > 0
+            or locate_regexpr(('[^[:alnum:]]' || lower(:cur_token)) IN lower(name)) > 0
+            or locate_regexpr(('^' || lower(:cur_token)) IN lower(name)) > 0
+            or locate_regexpr((lower(:cur_token) || '$') IN lower(name)) > 0
+            or lower(trim(:cur_token)) = lower(trim(name));
+      select min(substring(token, 1, 500)) into cur_token from :out_tbl where substring(token, 1, 500) > :cur_token;
+   end while;
+
+   -- Populate #tags_found table with other tags from knowledge items whose tag name contains token from request
+   insert into #tags_found(tag_id, name, new_tag)
+      select t.tag_id, lower(t.name), 2
+      from tag_knowledge_ix x, tag t
+      where x.knowledge_id in (select knowledge_id from tag_knowledge_ix
+                               where tag_id in (select tag_id from #tags_found where new_tag = 0))
+        and t.tag_id not in (select tag_id from #tags_found)
+        and t.tag_id = x.tag_id;
+
+   -- Populate #tags_found table with other tags from organization whose tag name contains token from request
+   insert into #tags_found(tag_id, name, new_tag)
+      select t.tag_id, lower(t.name), 3
+      from tag_organization_ix x, tag t
+      where x.organization_id in (select organization_id from tag_organization_ix
+                                  where tag_id in (select tag_id from #tags_found
+                                                   where new_tag = 0))
+        and t.tag_id not in (select tag_id from #tags_found)
+        and t.tag_id = x.tag_id;
+
+   -- Populate the #tags_found table with other tags from the service whose tag name contains a token from the request
+   insert into #tags_found(tag_id, name, new_tag)
+      select t.tag_id, lower(t.name), 4
+      from tag_service_ix x, tag t
+      where x.service_id in (select service_id from tag_service_ix
+                             where tag_id in (select tag_id from #tags_found
+                                              where new_tag = 0))
+        and t.tag_id not in (select tag_id from #tags_found)
+        and t.tag_id = x.tag_id;
+
+   -- Save off new and existing tags and references to request that recommender found removing old ones if they exist
+   if (:request_id > 0) then
+      delete from tag_rec_request_ix where request_id = :request_id;
+      insert into tag_rec(name)
+         select distinct name from #tags_found where tag_id = -1 and name not in (select name from tag_rec);
+      insert into tag_rec(tag_id, name)
+         select distinct tag_id, name from #tags_found
+         where tag_id > 0 and tag_id not in (select tag_id from tag_rec);
+      insert into tag_rec_request_ix(tag_id, request_id)
+         select distinct t.tag_id, :request_id from tag_rec t, #tags_found f where t.name = f.name;
+   end if;
+
+   select top 1000 distinct name tag from #tags_found;
+   drop table #tags_found;
+END

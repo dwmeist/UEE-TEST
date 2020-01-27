@@ -1,0 +1,1 @@
+CONSTRAINT fk_position_person_id on position FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE CASCADE

@@ -1,0 +1,6 @@
+entity PERSON_EXPERTISE_IX {
+    key PERSON_ID    : Integer not null;
+    key KNOWLEDGE_ID : Integer not null;
+        LEVEL        : hana.VARCHAR(200);
+        CONFIRMED    : hana.SMALLINT null;
+};

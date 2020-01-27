@@ -1,0 +1,1 @@
+CONSTRAINT fk_assignment_request_id on assignment FOREIGN KEY (request_id) REFERENCES request(request_id) ON DELETE SET NULL

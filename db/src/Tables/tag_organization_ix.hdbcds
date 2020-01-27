@@ -1,0 +1,4 @@
+entity TAG_ORGANIZATION_IX {
+    key TAG_ID          : Integer not null;
+    key ORGANIZATION_ID : Integer not null;
+};

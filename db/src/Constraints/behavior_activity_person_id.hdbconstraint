@@ -1,0 +1,1 @@
+CONSTRAINT fk_behavior_activity_person_id on behavior_activity FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE CASCADE

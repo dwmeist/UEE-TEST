@@ -1,0 +1,1 @@
+CONSTRAINT fk_person_phone_ix_phone_id on person_phone_ix FOREIGN KEY (phone_id) REFERENCES phone(phone_id) ON DELETE SET NULL

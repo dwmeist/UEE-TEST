@@ -1,0 +1,5 @@
+entity ENGAGEMENT_PARTICIPANT {
+    key ENGAGEMENT_PARTICIPANT_ID : Integer not null;
+    key PERSON_ID                 : Integer not null;
+    key ENGAGEMENT_ID             : Integer not null;
+};

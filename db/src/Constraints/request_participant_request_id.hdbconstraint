@@ -1,0 +1,1 @@
+CONSTRAINT fk_request_participant_request_id on request_participant FOREIGN KEY (request_id) REFERENCES request ON DELETE SET NULL

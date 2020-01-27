@@ -1,0 +1,4 @@
+entity TAG_SERVICE_IX {
+    key TAG_ID     : Integer not null;
+    key SERVICE_ID : Integer not null;
+};

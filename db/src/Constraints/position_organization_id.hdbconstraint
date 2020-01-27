@@ -1,0 +1,1 @@
+CONSTRAINT fk_position_organization_id on position FOREIGN KEY (organization_id) REFERENCES organization(organization_id) ON DELETE SET NULL

@@ -1,0 +1,1 @@
+CONSTRAINT fk_person_responsibility_ix_responsibility_id on person_responsibility_ix FOREIGN KEY (responsibility_id) REFERENCES responsibility(responsibility_id) ON DELETE SET NULL

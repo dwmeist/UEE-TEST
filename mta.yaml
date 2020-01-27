@@ -9,6 +9,12 @@ modules:
    requires:
     - name: hdi_db
 
+    - name: SYS-grantor
+
+    - name: POSTGRES-grantor
+
+    - name: UEE-grantor
+
 resources:
  - name: hdi_db
    parameters:
@@ -17,3 +23,12 @@ resources:
    properties:
       hdi-container-name: ${service-name}
    type: com.sap.xs.hdi-container
+
+ - name: SYS-grantor
+   type: org.cloudfoundry.existing-service
+
+ - name: POSTGRES-grantor
+   type: org.cloudfoundry.existing-service
+
+ - name: UEE-grantor
+   type: org.cloudfoundry.existing-service

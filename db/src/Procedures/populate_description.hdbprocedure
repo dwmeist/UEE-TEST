@@ -1,0 +1,23 @@
+PROCEDURE Populate_Description(in Int_Exper_Table varchar(50),
+                               in Person_ID integer,
+                               in Name_List clob)
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Populate_Description
+-- Description: Populate the Person_Score table with the Description scoring data.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare Query clob;                  -- Query being built and sent to HANA
+
+   -- Look for other persons with expertise having descriptions that include the name of the knowledge item that the
+   -- source person has expertise or interest in.  For instance, if the source person has expertise or an interest in
+   -- swimming, retrieve all persons who have expertise in a knowledge item with swimming in the desctiption
+   Query = 'insert into #Person_Score(Person_ID, Score_Type, PScore) '
+           'select x.person_id, ''D'' Score_Type, sum(score()) '
+           'from knowledge k, ' || :Int_Exper_Table || ' x '
+           'where x.knowledge_id = k.knowledge_id '
+             'and contains(description, ''' || :Name_List || ''', FUZZY(0.5)) '
+             'and x.person_id != ' || :Person_ID || ' '
+           'group by Person_ID';
+   execute immediate :Query;
+END

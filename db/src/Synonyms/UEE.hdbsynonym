@@ -1,0 +1,8 @@
+{
+  "VT_RDS_VW_PERSON_SECURITY_KEY_HANA": {
+    "target": {
+      "object": "RDS_vw_person_security_key_hana",
+      "schema": "UEE"
+    }
+  }
+}

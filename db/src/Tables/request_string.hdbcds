@@ -1,0 +1,4 @@
+entity REQUEST_STRING {
+    key REQUEST_ID     : Integer   not null;
+        REQUEST_STRING : hana.CLOB not null;
+};

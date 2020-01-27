@@ -1,0 +1,1 @@
+CONSTRAINT fk_service_expertise_ix_service_id on service_expertise_ix FOREIGN KEY (service_id) REFERENCES service(service_id) ON DELETE SET NULL

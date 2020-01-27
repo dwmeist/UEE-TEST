@@ -1,0 +1,1 @@
+CONSTRAINT fk_attachment_ext_parent_attachment_id on attachment_ext FOREIGN KEY (parent_attachment_id) REFERENCES attachment(attachment_id) ON DELETE CASCADE

@@ -1,0 +1,29 @@
+PROCEDURE Populate_Name_json(in Int_Exper_Table varchar(50),
+                             in Person_ID integer,
+                             in Name_List clob,
+                             in QName_List clob)
+LANGUAGE SQLSCRIPT AS
+----------------------------------------------------------------------------------------------------
+-- Procedure: Populate_Name_json
+-- Description: Populate the Person_Score table with the Name scoring data from the JSON Collection.
+----------------------------------------------------------------------------------------------------
+BEGIN
+   declare Query clob;                  -- Query being built and sent to HANA
+
+   -- Look for other persons with expertise having names that include the name of the knowledge item that the source
+   -- person has expertise or interest in.  Exact matches are not included.  For instance, if the source person has
+   -- expertise or interest in swimming, retrieve all persons who have expertise in a knowledge item with swimming in
+   -- the name, but not where swimming is the full name.  In this case, the query would find long distance swimmming,
+   -- but not swimming.
+   Query = 'insert into #Person_Score(Person_ID, Score_Type, First_Name, Last_Name, PScore, Security_Key, '
+                                         'Is_Searchable) '
+           'select x.person_id, ''N'' Score_Type, x.first_Name, x.last_name, sum(score()), x.security_key, '
+                  'x.is_searchable '
+           'from knowledge k, ' || :Int_Exper_Table || ' x '
+           'where x.knowledge_id = k.knowledge_id '
+             'and contains(name, ''' || :Name_List || ''', FUZZY(0.5, ''similarCalculationMode=substringsearch'')) '
+             'and x.person_id != ' || :person_id || ' '
+             'and trim(k.name) not in (' || :QName_List || ') '
+           'group by Person_ID, First_Name, Last_Name, Security_Key, Is_Searchable';
+   execute immediate :Query;
+END

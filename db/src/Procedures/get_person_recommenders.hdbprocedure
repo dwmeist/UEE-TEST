@@ -1,0 +1,137 @@
+PROCEDURE Get_Person_Recommenders(in Person_ID integer,
+                                  in Operator_ID varchar(256))
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Person_Recommenders
+-- Description: Given a person, provide other persons with similar expertise and
+--              interests and score the results.
+-- Modifications:
+-- 20191121  dwmeist  Added Is_Searchable checks in uee.person table.  FD-726 & FD-792
+-------------------------------------------------------------------------------------
+BEGIN
+   declare X_Expert_Level decimal(6,5) = 1.00;   -- Weight associated with Expert Level Expertise Knowledge
+   declare X_Senior_Level decimal(6,5) = 0.95;   -- Weight associated with Senior Level Expertise Knowledge
+   declare X_Interm_Level decimal(6,5) = 0.90;   -- Weight associated with Intermediate Level Expertise Knowledge
+   declare X_Novice_Level decimal(6,5) = 0.85;   -- Weight associated with Novice Level Expertise Knowledge
+   declare I_Expert_Level decimal(6,5) = 0.60;   -- Weight associated with Expert Level Interest Knowledge
+   declare I_Senior_Level decimal(6,5) = 0.55;   -- Weight associated with Senior Level Interest Knowledge
+   declare I_Interm_Level decimal(6,5) = 0.50;   -- Weight associated with Intermediate Level Interest Knowledge
+   declare I_Novice_Level decimal(6,5) = 0.45;   -- Weight associated with Novice Level Interest Knowledge
+
+   declare X_Name_List clob = '';                -- List of Expertise Names for the Person
+   declare X_QName_List clob = '';               -- List of Quoted Expertise Names for the Person
+   declare X_Found_Person tinyint = 0;           -- Verifies that a person with the given ID was found with an Expertise
+   declare I_Name_List clob = '';                -- List of Interest Names for the Person
+   declare I_QName_List clob = '';               -- List of Quoted Interest Names for the Person
+   declare I_Found_Person tinyint = 0;           -- Verifies that a person with the given ID was found with an Expertise
+   declare XI_Name_List clob = '';               -- List of Expertise and Interest Names for the Person
+   declare XI_QName_List clob = '';              -- List of Quoted Expertise and Interest Names for the Person
+   declare Query clob;                           -- Query being built and sent to HANA
+   declare EI_Table interest_expertise_ix;       -- Contains the table being processed (Expertise or Interest)
+
+   -- Create temporary table to store scoring information about the source person
+   create local temporary table #Person_Score(person_id integer, pscore float, Score_Type char(1));
+
+   -- Populate the strings needed for the Expertise Queries
+   EI_Table = select Person_ID, Knowledge_ID, Level, Confirmed from person_expertise_ix;
+   call Get_Knowledge_Strings(:EI_Table, :Person_ID, :X_Found_Person, X_Name_List, X_QName_List);
+
+   -- Populate the strings needed for the Interest Queries
+   EI_Table = select Person_ID, Knowledge_ID, Level, Confirmed from person_interest_ix;
+   call Get_Knowledge_Strings(:EI_Table, :Person_ID, :I_Found_Person, I_Name_List, I_QName_List);
+
+   if (:X_Found_Person + :I_Found_Person > 0) then
+      -- Get the Knowledge scores associated with the expertise and interests of the source person
+      KScore = select k.Knowledge_id,
+             k.Name as KName,
+             case x.level
+                when 'Expert' then X_Expert_Level
+                when 'Senior' then X_Senior_Level
+                when 'Intermediate' then X_Interm_Level
+                when 'Novice' then X_Novice_Level
+             end as Score
+      from knowledge k, person_expertise_ix x
+      where k.knowledge_id = x.knowledge_id
+        and x.person_id = :Person_ID
+      union
+      select k.Knowledge_id,
+             k.Name,
+             case x.level
+                when 'Expert' then I_Expert_Level
+                when 'Senior' then I_Senior_Level
+                when 'Intermediate' then I_Interm_Level
+                when 'Novice' then I_Novice_Level
+             end
+      from knowledge k, person_interest_ix x
+      where k.knowledge_id = x.knowledge_id
+        and x.person_id = :Person_ID;
+
+      -- Populate the Person_Score table with Exact Matches scores from the Target persons expertise
+      insert into #Person_Score(Person_ID, Score_Type, PScore)
+      select x.person_id, 'E' Score_Type,
+                  -- Weighting the Target Persons knowldge items
+             sum((case x.level when 'Expert' then X_Expert_Level
+                               when 'Senior' then X_Senior_Level
+                               when 'Intermediate' then X_Interm_Level
+                               when 'Novice' then X_Novice_Level
+                  end) * k.score)
+      from person_expertise_ix x,
+           person p,
+           :KScore k
+      where x.knowledge_id in (select Knowledge_ID from :KScore)
+        and p.person_id = x.person_id and p.person_id != :Person_ID
+        and k.knowledge_id = x.knowledge_id
+      group by x.Person_ID;
+
+      -- Populate the Person_Score table with Exact Matches scores from the Target persons interests
+      insert into #Person_Score(Person_ID, Score_Type, PScore)
+      select x.person_id, 'E' Score_Type,
+                  -- Weighting the Target Persons knowldge items
+             sum((case x.level when 'Expert' then I_Expert_Level
+                               when 'Senior' then I_Senior_Level
+                               when 'Intermediate' then I_Interm_Level
+                               when 'Novice' then I_Novice_Level
+                  end) * k.score)
+      from person_interest_ix x,
+           person p,
+           :KScore k
+      where x.knowledge_id in (select Knowledge_ID from :KScore)
+        and p.person_id = x.person_id and p.person_id != :Person_ID
+        and k.knowledge_id = x.knowledge_id
+      group by x.Person_ID;
+
+      --  Build the final Name lists depending on Expertise and Interest Lists
+      if (:X_Found_Person + :I_Found_Person = 2) then
+         XI_Name_List = :X_Name_List || ' OR ' || :I_Name_List;
+         XI_QName_List = :X_QName_List || ',' || :I_QName_List;
+      elseif (:X_Found_Person = 1) then
+         XI_Name_List = :X_Name_List;
+         XI_QName_List = :X_QName_List;
+      else
+         XI_Name_List = :I_Name_List;
+         XI_QName_List = :I_QName_List;
+      end if;
+
+      --  Populate the Scoring tables based on searches from the Expertise table data
+      call Populate_Description('uee.person_expertise_ix', :Person_ID, :XI_Name_List);
+      call Populate_Name('uee.person_expertise_ix', :Person_ID, :XI_Name_List, :XI_QName_List);
+
+      --  Populate the Scoring tables based on searches from the Interest table data
+      call Populate_Description('uee.person_interest_ix', :Person_ID, :XI_Name_List);
+      call Populate_Name('uee.person_interest_ix', :Person_ID, :XI_Name_List, :XI_QName_List);
+   end if;
+
+   -- Sum up all of the scores by person and employ security ordering appropriately
+   Score_Data = select Person_ID, sum(pscore) pscore from #Person_Score group by Person_ID;
+   select top 20 a.Person_ID, First_Name, Last_Name, PScore
+   from :Score_Data a, person b
+   where a.Person_ID = b.Person_ID
+     and b.Security_Key_ID in (select "security_key_id"
+                               from VT_RDS_VW_PERSON_SECURITY_KEY_HANA
+                               where "operator_id" = :Operator_ID)
+     and b.Is_Searchable = true
+   order by pscore desc;
+
+   -- Clean up...
+   drop table #Person_Score;
+END;

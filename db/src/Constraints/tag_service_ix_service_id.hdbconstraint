@@ -1,0 +1,1 @@
+CONSTRAINT fk_tag_service_ix_service_id on tag_service_ix FOREIGN KEY (service_id) REFERENCES service(service_id) ON DELETE SET NULL

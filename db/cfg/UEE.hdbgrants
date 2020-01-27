@@ -1,0 +1,38 @@
+{
+  "SYS-grantor": {
+     "object_owner": {
+           "roles": [
+               "SYS::external_access_g"
+           ]
+     },
+     "application_user": {
+           "roles": [
+               "SYS::external_access"
+           ]
+     }
+  },
+  "POSTGRES-grantor": {
+     "object_owner": {
+           "roles": [
+               "POSTGRES::external_access_g"
+           ]
+     },
+     "application_user": {
+           "roles": [
+               "POSTGRES::external_access"
+           ]
+     }
+  },
+  "UEE-grantor": {
+     "object_owner": {
+           "roles": [
+               "UEE::external_access_g"
+           ]
+     },
+     "application_user": {
+           "roles": [
+               "UEE::external_access"
+           ]
+     }
+  }
+}

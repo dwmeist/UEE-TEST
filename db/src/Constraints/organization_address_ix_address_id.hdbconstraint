@@ -1,0 +1,1 @@
+CONSTRAINT fk_organization_address_ix_address_id on organization_address_ix FOREIGN KEY (address_id) REFERENCES address(address_id) ON DELETE SET NULL

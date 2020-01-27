@@ -1,0 +1,1 @@
+CONSTRAINT fk_request_participant_person_id on request_participant FOREIGN KEY (person_id) REFERENCES person ON DELETE CASCADE

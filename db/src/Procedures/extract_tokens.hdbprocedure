@@ -1,0 +1,42 @@
+PROCEDURE Extract_Tokens(in  request nclob,
+                             out o1 table(token nvarchar(5000), type nvarchar(100)))
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Extract_Tokens
+-- Description: Extact all nouns and proper names from input using
+--              HANA LINGANALYSIS_FULL configuration.  Return the stem instead of the
+--              token unless it is null.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare LANGUAGE_CODE varchar(2) = 'EN';
+   declare MIME_TYPE varchar(20) = '';
+   declare LANGUAGE_DETECTION varchar(20) = '';
+   declare PLAINTEXT nclob;
+--   declare CONFIGURATION varchar(20) = 'EXTRACTION_CORE';
+   declare CONFIGURATION varchar(20) = 'LINGANALYSIS_FULL';
+   declare RETURN_PLAINTEXT integer = 1;
+   declare TA_ANNOTATIONS table(rule nvarchar(200),
+                                counter bigint,
+                                token nvarchar(5000),
+                                type nvarchar(100),
+                                normalized nvarchar(5000),
+                                stem nvarchar(5000),
+                                paragraph integer,
+                                sentence integer,
+                                offset bigint,
+                                parent bigint,
+                                expanded_type nvarchar(200));
+
+   CALL TA_ANALYZE ('',
+                    :request,
+                    LANGUAGE_CODE,
+                    MIME_TYPE,
+                    '',
+                    LANGUAGE_DETECTION,
+                    '',
+                    CONFIGURATION,
+                    RETURN_PLAINTEXT,
+                    TA_ANNOTATIONS,
+                    PLAINTEXT );
+   o1 = select ifnull(stem, token) token, type from :TA_ANNOTATIONS where type in ('proper name', 'noun');
+END

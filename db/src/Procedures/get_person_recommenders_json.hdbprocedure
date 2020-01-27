@@ -1,0 +1,216 @@
+PROCEDURE Get_Person_Recommenders_json(in Person_ID integer, in Operator_ID varchar(256))
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Person_Recommenders
+-- Description: Given a person, provide other persons with similar expertise and
+--              interests and score the results.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare X_Expert_Level decimal(6,5) = 1.00;         -- Weight associated with Expert Level Expertise Knowledge
+   declare X_Senior_Level decimal(6,5) = 0.95;         -- Weight associated with Senior Level Expertise Knowledge
+   declare X_Interm_Level decimal(6,5) = 0.90;         -- Weight associated with Intermediate Level Expertise Knowledge
+   declare X_Novice_Level decimal(6,5) = 0.85;         -- Weight associated with Novice Level Expertise Knowledge
+   declare I_Expert_Level decimal(6,5) = 0.60;         -- Weight associated with Expert Level Interest Knowledge
+   declare I_Senior_Level decimal(6,5) = 0.55;         -- Weight associated with Senior Level Interest Knowledge
+   declare I_Interm_Level decimal(6,5) = 0.50;         -- Weight associated with Intermediate Level Interest Knowledge
+   declare I_Novice_Level decimal(6,5) = 0.45;         -- Weight associated with Novice Level Interest Knowledge
+
+   declare X_Name_List clob = '';                      -- List of Expertise Names for the Person
+   declare X_QName_List clob = '';                     -- List of Quoted Expertise Names for the Person
+   declare X_Found_Person tinyint = 0;                 -- Verifies that the person was found with an Expertise
+   declare I_Name_List clob = '';                      -- List of Interest Names for the Person
+   declare I_QName_List clob = '';                     -- List of Quoted Interest Names for the Person
+   declare I_Found_Person tinyint = 0;                 -- Verifies that the person was found with an Expertise
+   declare XI_Name_List clob = '';                     -- List of Expertise and Interest Names for the Person
+   declare XI_QName_List clob = '';                    -- List of Quoted Expertise and Interest Names for the Person
+   declare EI_Table interest_expertise_ix;             -- Contains the table being processed (Expertise or Interest)
+   declare cur_pzinskey nvarchar(255);                 -- Current Person Unique Key being processed
+   declare cur_person_id integer;                      -- Current Person ID being processd
+   declare cur_first_name varchar(45);                 -- Current First Name being processed
+   declare cur_last_name varchar(45);                  -- Current Last Name being processed
+   declare cur_security_key integer;                   -- Current Security Key being processed
+   declare cur_knowledge_list nclob;                   -- Current Knowledge List being processed
+   declare cur_know integer;                           -- Current Knowledge Item being processed
+   declare cur_know_tbl table (result nvarchar(5000)); -- Table of current knowledge items being processed
+   declare cur_is_searchable nvarchar(10);             -- Current Is_searchable being processed
+
+   -- Create temporary table to store scoring information about the source person
+   create local temporary table #Person_Score(person_id integer,
+                                              first_name varchar(45),
+                                              last_name varchar(45),
+                                              pscore float,
+                                              Score_Type char(1),
+                                              security_key integer,
+                                              is_searchable nvarchar(10));
+
+   -- Create temporary tables to extract knowledge ids from the stored JSON
+   create local temporary table #X_knowledge_lists(pzInsKey nvarchar(255),
+                                                   person_id integer,
+                                                   first_name varchar(45),
+                                                   last_name varchar(45),
+                                                   knowledge_lists nclob,
+                                                   security_key varchar(100),
+                                                   is_searchable nvarchar(10));
+   create local temporary table #I_knowledge_lists(pzInsKey nvarchar(255),
+                                                   person_id integer,
+                                                   first_name varchar(45),
+                                                   last_name varchar(45),
+                                                   knowledge_lists nclob,
+                                                   security_key varchar(100),
+                                                   is_searchable nvarchar(10));
+   create local temporary table #X_knows(pzInsKey nvarchar(255),
+                                         person_id integer,
+                                         first_name varchar(45),
+                                         last_name varchar(45),
+                                         knowledge_id integer,
+                                         security_key integer,
+                                         is_searchable nvarchar(10));
+   create local temporary table #I_knows(pzInsKey nvarchar(255),
+                                         person_id integer,
+                                         first_name varchar(45),
+                                         last_name varchar(45),
+                                         knowledge_id integer,
+                                         security_key integer,
+                                         is_searchable nvarchar(10));
+
+   -- Populate the knowledge_list table with expertise information from the stored JSON, one row per person
+   insert into #X_knowledge_lists(pzInsKey, person_id, first_name, last_name, knowledge_lists, security_key,
+                                  is_searchable)
+      select "pzInsKey", "personId", "firstName", "lastName", JSON_QUERY(json_person, '$.expertise[*].topicId'),
+             "securityKey", "preference"."isSearchable"
+      from json_person;
+
+   -- Process each person found
+   select min(pzinskey) into cur_pzinskey from #X_knowledge_lists;
+   while (:cur_pzinskey is not null) do
+      -- Process the persons list of knowledge items
+      select top 1 person_id, first_name, last_name, knowledge_lists, case security_key
+                                                                           when '' then 0
+                                                                           when NULL then 0
+                                                                           else TO_INTEGER(security_key)
+                                                                      end, is_searchable
+             into cur_person_id, cur_first_name, cur_last_name, cur_knowledge_list, cur_security_key, cur_is_searchable
+      from #X_knowledge_lists
+      where pzinskey = :cur_pzinskey;
+      cur_know_tbl = SQLSCRIPT_STRING:SPLIT_TO_TABLE(:cur_knowledge_list,',');
+      insert into #X_knows(pzInsKey, person_id, first_name, last_name, knowledge_id, security_key, is_searchable)
+         select :cur_pzinskey, :cur_person_id, :cur_first_name, :cur_last_name, result, :cur_security_key,
+                :cur_is_searchable
+         from :cur_know_tbl
+         where result != ''
+           and result is not null;
+      -- Get the next searchable person
+      select min(pzinskey) into cur_pzinskey
+      from #X_knowledge_lists
+      where pzinskey > :cur_pzinskey;
+   end while;
+
+   -- Populate the strings needed for the Expertise Queries
+   EI_Table = select Person_ID, Knowledge_ID, '' Level, TO_SMALLINT(0) Confirmed from #X_knows;
+   call Get_Knowledge_Strings(:EI_Table, :Person_ID, :X_Found_Person, X_Name_List, X_QName_List);
+
+   -- Populate the knowledge_list table with interest information from the stored JSON, one row per person
+   insert into #I_knowledge_lists(pzInsKey, person_id, first_name, last_name, knowledge_lists, security_key,
+                                  is_searchable)
+      select "pzInsKey", "personId", "firstName", "lastName", JSON_QUERY(json_person, '$.interests[*].topicId'),
+             "securityKey", "preference"."isSearchable"
+      from json_person;
+
+   -- Process each person found
+   select min(pzinskey) into cur_pzinskey from #I_knowledge_lists;
+   while (:cur_pzinskey is not null) do
+      -- Process the persons list of knowledge items
+      select top 1 person_id, first_name, last_name, knowledge_lists, case security_key
+                                                                           when '' then 0
+                                                                           when NULL then 0
+                                                                           else TO_INTEGER(security_key)
+                                                                      end, is_searchable
+             into cur_person_id, cur_first_name, cur_last_name, cur_knowledge_list, cur_security_key, cur_is_searchable
+      from #I_knowledge_lists
+      where pzinskey = :cur_pzinskey;
+      cur_know_tbl = SQLSCRIPT_STRING:SPLIT_TO_TABLE(:cur_knowledge_list,',');
+      insert into #I_knows(pzInsKey, person_id, first_name, last_name, knowledge_id, security_key, is_searchable)
+         select :cur_pzinskey, :cur_person_id, :cur_first_name, :cur_last_name, result, :cur_security_key,
+                :cur_is_searchable
+         from :cur_know_tbl
+         where result != ''
+           and result is not null;
+      -- Get the next searchable person
+      select min(pzinskey) into cur_pzinskey
+      from #I_knowledge_lists
+      where pzinskey > :cur_pzinskey;
+   end while;
+
+   -- Populate the strings needed for the Interest Queries
+   EI_Table = select Person_ID, Knowledge_ID, '' Level, TO_SMALLINT(0) Confirmed from #I_knows;
+   call Get_Knowledge_Strings(:EI_Table, :Person_ID, :I_Found_Person, I_Name_List, I_QName_List);
+
+   if (:X_Found_Person + :I_Found_Person > 0) then
+      -- Set the Knowledge scores to Expert for expertise and interests since we do not have levels in the JSON
+      KScore = select k.knowledge_id, k.Name as KName, :X_Expert_Level as Score
+               from #X_knows x, knowledge k
+               where x.knowledge_id = k.knowledge_id and x.person_id = :Person_ID
+               union
+               select k.knowledge_id, k.Name as KName, :I_Expert_Level as Score
+               from #I_knows x, knowledge k
+               where x.knowledge_id = k.knowledge_id and x.person_id = :Person_ID;
+
+      -- Populate the Person_Score table with Exact Matches scores from the Target persons expertise
+      insert into #Person_Score(Person_ID, Score_Type, First_Name, Last_Name, PScore, Security_Key, Is_Searchable)
+      select t.Person_ID, 'E' Score_Type, t.First_Name, t.Last_Name, s.score * :X_Expert_Level, t.Security_Key,
+             t.Is_Searchable
+      from :KScore s, (select distinct * from #X_knows) t
+      where s.knowledge_id = t.knowledge_id;
+
+      -- Populate the Person_Score table with Exact Matches scores from the Target persons interests
+      insert into #Person_Score(Person_ID, Score_Type, First_Name, Last_Name, PScore, Security_Key, Is_Searchable)
+      select t.Person_ID, 'E' Score_Type, t.First_Name, t.Last_Name, s.score * :I_Expert_Level, t.Security_Key,
+             t.Is_Searchable
+      from :KScore s, (select distinct * from #I_knows) t
+      where s.knowledge_id = t.knowledge_id;
+
+      --  Build the final Name lists depending on Expertise and Interest Lists
+      if (:X_Found_Person + :I_Found_Person = 2) then
+         XI_Name_List = :X_Name_List || ' OR ' || :I_Name_List;
+         XI_QName_List = :X_QName_List || ',' || :I_QName_List;
+      elseif (:X_Found_Person = 1) then
+         XI_Name_List = :X_Name_List;
+         XI_QName_List = :X_QName_List;
+      else
+         XI_Name_List = :I_Name_List;
+         XI_QName_List = :I_QName_List;
+      end if;
+
+      --  Populate the Scoring tables based on searches from the Expertise table data
+      call Populate_Description_json('(select distinct * from #X_knows)', :Person_ID,
+                                         :XI_Name_List);
+      call Populate_Name_json('(select distinct * from #X_knows)', :Person_ID,
+                                  :XI_Name_List, :XI_QName_List);
+
+      --  Populate the Scoring tables based on searches from the Interest table data
+      call Populate_Description_json('(select distinct * from #I_knows)', :Person_ID,
+                                         :XI_Name_List);
+      call Populate_Name_json('(select distinct * from #I_knows)', :Person_ID,
+                                  :XI_Name_List, :XI_QName_List);
+   end if;
+
+   -- Sum up all of the scores by person and employ security ordering appropriately
+   Score_Data = select Person_ID, First_Name, Last_Name, sum(pscore) pscore, Security_Key, Is_Searchable
+                from #Person_Score
+                group by Person_ID, First_Name, Last_Name, Security_Key, Is_Searchable;
+   select top 20 Person_ID, First_Name, Last_Name, PScore
+   from :Score_Data
+   where security_key in (select "security_key_id"
+                          from VT_RDS_VW_PERSON_SECURITY_KEY_HANA
+                          where "operator_id" = :Operator_ID)
+     and Person_ID != :Person_ID
+     and Is_Searchable = 'true'
+   order by pscore desc;
+
+   -- Clean up...
+   drop table #Person_Score;
+   drop table #X_knows;
+   drop table #I_knows;
+   drop table #X_knowledge_lists;
+   drop table #I_knowledge_lists;
+END;

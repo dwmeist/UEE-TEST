@@ -1,0 +1,80 @@
+PROCEDURE Get_Org_Recommenders(in Org_Tags_List nclob,           -- Comma-separated list of tags
+                               in Operator_ID varchar(256),      -- ID of user running query
+                               in request_id integer default '0')  -- Request ID for this tag set
+LANGUAGE SQLSCRIPT AS
+-------------------------------------------------------------------------------------
+-- Procedure: Get_Org_Recommenders
+-- Description: Retrieve organization that best fits the request.  Order by orgs
+--              that are the closest match.
+-------------------------------------------------------------------------------------
+BEGIN
+   declare List_of_Names clob;                        -- Concatenated String of all Tags separated by a space
+   declare Knowledge_Name_Match_Weight float = 0.8;   -- Weight for Tags matching the Knowledge Name exactly
+   declare Knowledge_Description_Weight float = 0.6;  -- Weight for Tags in Knowledge Description using Fuzzy Search
+   declare Knowledge_Name_Partial_Weight float = 0.4; -- Weight for Tags in but not equal to Knowledge Name using
+                                                      -- Fuzzy Search
+   declare One_Tag nvarchar(5000);                    -- One tag extracted from the list of tags to be processed
+   declare Remaining_Tags nclob;                      -- Remaining list of tags to be processed
+   declare Org_Tags table(tag varchar(500));          -- Table variable storing all of the tags from the list
+   declare tags_param table (result nvarchar(5000));  -- Table of organization tags parameter
+
+   create local temporary table #Org_Score(org_id integer, oscore double);
+
+   -- Build Organization Tag table variable from clob string for easier manipulation
+   tags_param = SQLSCRIPT_STRING:SPLIT_TO_TABLE(:Org_Tags_List,',');
+   insert into :Org_Tags select trim(result) from :tags_param;
+
+   -- Store any new tags and associate the tags with the request_ID after removing old associations
+   if (:request_id > 0) then
+      delete from tag_request_ix where request_id = :request_id;
+      insert into tag(tag_id, name)
+         select tag_id, name from tag_rec
+         where name in (select tag from :Org_Tags)
+           and tag_id not in (select tag_id from tag);
+      insert into tag_request_ix(tag_id, request_id)
+         select tag_id, :request_id from tag where name in (select tag from :Org_Tags);
+   end if;
+
+   -- Find all Organizations that have any of these tags, no weight applied
+   insert into #Org_Score(org_id, oscore)
+      select Organization_ID, count(*)
+      from Tag t, Tag_Organization_IX x, :Org_Tags ot
+      where t.Tag_ID  = x.Tag_ID
+        and lower(ot.tag) = lower(t.name)
+      group by Organization_ID;
+
+   -- Find all tags that match knowledge names exactly and score according to how many you find for an Org
+   insert into #Org_Score(org_id, oscore)
+      select c.Organization_ID, :Knowledge_Name_Match_Weight * count(*)
+      from :Org_Tags a, Knowledge b, Organization_Expertise_IX c
+      where lower(trim(a.tag)) = lower(trim(b.name))
+        and b.knowledge_id = c.knowledge_id
+      group by c.Organization_ID;
+
+   -- Find all tags that are contained in the knowledge description and use fuzzy search scoring
+   select string_agg(tag, ' ' order by tag) into List_of_Names from :Org_Tags;
+   insert into #Org_Score(org_id, oscore)
+      select x.organization_id, :Knowledge_Description_Weight * score()
+      from knowledge k, organization_expertise_ix x
+      where contains(description, lower(trim(:List_of_Names)), FUZZY(0.01))
+        and k.knowledge_id = x.knowledge_id;
+
+   -- Find all tags that are contained in, but not equal to the knowledge name and use fuzzy search scoring
+   insert into #Org_Score(org_id, oscore)
+      select x.organization_id, :Knowledge_Name_Partial_Weight * score()
+      from knowledge k, organization_expertise_ix x
+      where contains(name, lower(trim(:List_of_Names)), FUZZY(0.5, 'similarCalculationMode=substringsearch'))
+        and k.knowledge_id = x.knowledge_id
+        and lower(trim(name)) not in (select lower(trim(tag)) from :Org_Tags);
+
+   -- Select the Organization IDs with the top scores
+   select top 20 org_id ID, sum(oscore) OScore
+   from #Org_Score s, Organization o
+   where s.org_id = o.organization_id
+     and o.Security_Key_ID in (select "security_key_id"
+                               from VT_RDS_VW_PERSON_SECURITY_KEY_HANA
+                               where "operator_id" = :Operator_ID)
+   group by org_id order by OScore desc;
+
+   drop table #Org_Score;
+END

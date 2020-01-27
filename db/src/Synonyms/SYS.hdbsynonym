@@ -1,0 +1,14 @@
+{
+  "TA_ANALYZE": {
+    "target": {
+      "object": "TA_ANALYZE",
+      "schema": "SYS"
+    }
+  },
+  "DUMMY": {
+    "target": {
+      "object": "DUMMY",
+      "schema": "SYS"
+    }
+  }
+}

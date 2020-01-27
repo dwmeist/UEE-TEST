@@ -1,0 +1,1 @@
+CONSTRAINT fk_organization_expertise_ix_organization_id on organization_expertise_ix FOREIGN KEY (organization_id) REFERENCES organization(organization_id) ON DELETE SET NULL

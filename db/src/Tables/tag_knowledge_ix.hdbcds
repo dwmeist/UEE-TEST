@@ -1,0 +1,4 @@
+entity TAG_KNOWLEDGE_IX {
+    key TAG_ID       : Integer not null;
+    key KNOWLEDGE_ID : Integer not null;
+};

@@ -1,0 +1,4 @@
+entity TAG_REC_REQUEST_IX {
+    key TAG_ID     : Integer not null;
+    key REQUEST_ID : Integer not null;
+};

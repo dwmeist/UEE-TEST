@@ -1,0 +1,4 @@
+entity SERVICE_EXPERTISE_IX {
+    key SERVICE_ID   : Integer not null;
+    key KNOWLEDGE_ID : Integer not null;
+};

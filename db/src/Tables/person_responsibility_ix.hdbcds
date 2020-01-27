@@ -1,0 +1,8 @@
+entity PERSON_RESPONSIBILITY_IX {
+    key PERSON_ID         : Integer not null;
+    key RESPONSIBILITY_ID : Integer not null;
+        CREATED_DATE      : UTCTimestamp null;
+        CREATED_BY        : hana.VARCHAR(45) null;
+        MODIFIED_DATE     : UTCTimestamp null;
+        MODIFIED_BY       : hana.VARCHAR(45) null;
+};

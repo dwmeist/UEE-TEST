@@ -1,0 +1,1 @@
+CONSTRAINT fk_assignment_organization_id on assignment FOREIGN KEY (organization_id) REFERENCES organization(organization_id) ON DELETE SET NULL

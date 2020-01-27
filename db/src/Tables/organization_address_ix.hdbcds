@@ -1,0 +1,4 @@
+entity ORGANIZATION_ADDRESS_IX {
+    key ORGANIZATION_ID : Integer not null;
+    key ADDRESS_ID      : Integer not null;
+};
